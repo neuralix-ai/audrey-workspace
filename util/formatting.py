@@ -1,6 +1,7 @@
 from copy import deepcopy
 import pandas as pd
 import numpy as np
+from util.preprocessing import find_closest_time
 
 
 def format_sitegts(site_start,site_freqs,duration_len):
@@ -37,8 +38,8 @@ def ryan_format(data, ryan_sites_info, audrey_sitegts):
     # ================================================
 
     ryan_format_sitegts = deepcopy(ryan_sites_info) # we need to keep the rest of the structure of Ryan's sites_info (enable, num_pumps, etc.)
-    format_calib_stage = []
     for site in ryan_format_sitegts: # for each site in the database...
+        format_calib_stage = []
         site_id = site['site_id'] # for each site in Ryan's gt,
         curr_site_gts = audrey_sitegts[site_id] # find the site estimated gt in Audrey's idx format dictionary
         for freq in curr_site_gts.keys(): # for each frequency at a site...
