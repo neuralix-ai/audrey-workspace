@@ -1,8 +1,9 @@
 import os
 import pandas as pd
 import psycopg2
-from preprocessing import process_voltage_and_current
-
+from datetime import datetime, timedelta
+from util.preprocessing import process_voltage_and_current
+import json
 
 def cached_bison_data(filepath):
     df = pd.read_csv(filepath)
@@ -11,7 +12,7 @@ def cached_bison_data(filepath):
     return df
 
 
-def fetch_bison_data(filepath):
+def fetch_bison_data(filepath, start_time=datetime.now() - timedelta(days=62), end_time=datetime.now()):
     device_ids = [
         57740,
         # 48034,
@@ -47,12 +48,6 @@ def fetch_bison_data(filepath):
     # 4. Time Range
     # time_interval = '1 hour'  # Adjust as needed
     time_interval = None
-    # Alternatively, specify exact start and end times
-    # start_time = datetime.now() - timedelta(days=30)
-    # end_time = datetime.now() 
-    start_time = '2024-09-01'#datetime.now() - timedelta(days=7)
-    end_time = '2024-12-31'#datetime.now()
-    # end_time = datetime.now() 
 
     # Function to generate SQL query
     def generate_sql_query(device_ids, device_name_substrings, time_zone, measurements, time_interval):
@@ -135,18 +130,23 @@ def fetch_bison_data(filepath):
 
     # Generate the query and parameters
     query, params = generate_sql_query(device_ids, device_name_substrings, time_zone, measurements, time_interval)
-    # print("Generated SQL Query:")
-    # print(query)
-    # print("Query Parameters:")
-    # print(params)
+    
+    cred_path = "/Users/audreyder/Neuralix/bison_credentials.json"
+    credentials = None
+    with open(cred_path, 'r') as file:
+        credentials = json.load(file)
+    REDSHIFT_ENDPOINT = credentials['REDSHIFT_ENDPOINT']
+    REDSHIFT_PORT = credentials['REDSHIFT_PORT']
+    REDSHIFT_DBNAME = credentials['REDSHIFT_DBNAME']
+    REDSHIFT_USER = credentials['REDSHIFT_USER']
+    REDSHIFT_PASS = credentials['REDSHIFT_PASS']
 
-    # Set up your database connection (replace with your actual credentials)
     conn = psycopg2.connect(
-        host=os.getenv('REDSHIFT_ENDPOINT'),
-        port=os.getenv('REDSHIFT_PORT'),
-        database=os.getenv('REDSHIFT_DBNAME'),
-        user=os.environ.get('REDSHIFT_USER'),
-        password=os.getenv('REDSHIFT_PASS')
+        user = REDSHIFT_USER,
+        password = REDSHIFT_PASS,
+        host = REDSHIFT_ENDPOINT,
+        port = REDSHIFT_PORT,
+        database = REDSHIFT_DBNAME
     )
 
     # Execute the query and load results into a pandas DataFrame
@@ -166,7 +166,7 @@ def fetch_bison_data(filepath):
 
 
 def cached_site_info():
-    datapath = "AllPumpCSV/"
+    datapath = "/Users/audreyder/Neuralix/AllPumpCSV/"
     sites_info = [
     {
         'enable': False,

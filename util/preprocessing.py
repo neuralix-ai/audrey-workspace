@@ -14,7 +14,7 @@ def find_closest_time(data, query_date, query_time='00:00:00'):
     date_subset = data[data['timestamp'].str.contains(query_date)]
     query_datetime = datetime.strptime(query_date+" "+query_time, "%Y-%m-%d %H:%M:%S")
     closest_timestamp = datetime.strptime(date_subset.iloc[0]['timestamp'], "%Y-%m-%d %H:%M:%S")
-    closest_timeidx = date_subset.iloc[0].index
+    closest_timeidx = date_subset.iloc[0].name
     for i, row in date_subset.iterrows():
         curr_date = datetime.strptime(row['timestamp'], "%Y-%m-%d %H:%M:%S")
         if abs(query_datetime-curr_date) < abs(query_datetime-closest_timestamp):
