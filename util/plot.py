@@ -1,8 +1,20 @@
 import matplotlib.pyplot as plt
 from copy import deepcopy
 import numpy as np
+import plotly.express as px
 
-def plot_ts_gt(sitegts, freq_data_, site_id, site_bounds):
+# Function to map frequency to color
+def map_frequency_to_color(frequencies): # from Ryan -- with a few alterations
+    # Map to color index
+    # Define the colorscale
+    colorscale = px.colors.sequential.Turbo
+    n_colors = len(colorscale)
+    color_index = lambda freq: int((freq - min(freq)) / (max(freq) - min(freq)) * (n_colors - 1))
+    color_map = color_index(frequencies)
+    return color_map
+
+
+def plot_ts_gt(sitegts, freq_data_, site_id, site_bounds): # call this on a per site basis
     # plot the time series estimated ground truth
     # the first plot is the time series and estiamted ground truth
     # the second plot is a set of surrounding indices before, during, and after the estimated ground truth for visual clarity

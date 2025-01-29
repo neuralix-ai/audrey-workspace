@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 from datetime import datetime
+from scipy.optimize import brentq
 
 
 def find_closest_time(data, query_date, query_time='00:00:00'):
@@ -15,6 +16,7 @@ def find_closest_time(data, query_date, query_time='00:00:00'):
     query_datetime = datetime.strptime(query_date+" "+query_time, "%Y-%m-%d %H:%M:%S")
     closest_timestamp = datetime.strptime(date_subset.iloc[0]['timestamp'], "%Y-%m-%d %H:%M:%S")
     closest_timeidx = date_subset.iloc[0].name
+
     for i, row in date_subset.iterrows():
         curr_date = datetime.strptime(row['timestamp'], "%Y-%m-%d %H:%M:%S")
         if abs(query_datetime-curr_date) < abs(query_datetime-closest_timestamp):
@@ -24,6 +26,51 @@ def find_closest_time(data, query_date, query_time='00:00:00'):
 
 
 # =======================================================================================
+
+def find_intersection_point(func1, func2, x_min, x_max):
+    def func_diff(x):
+        return func1(x) - func2(x)
+    try:
+        x_intersect = brentq(func_diff, x_min, x_max)
+        y_intersect = func1(x_intersect)
+        return x_intersect, y_intersect
+    except ValueError:
+        return None
+    
+
+def interpolate_missing_freqs(freq_dict): # From Ryan
+        """
+        Interpolates means and stds for missing frequencies.
+        freq_dict should be {freq: {'mean':..., 'std':...}}
+        """
+        freqs = sorted(freq_dict.keys())
+        if len(freqs) <= 1:
+            # If we have only one or zero frequencies, no interpolation is possible
+            return freq_dict
+
+        full_freq_range = range(freqs[0], freqs[-1] + 1)
+        interpolated_freqs = set()
+        for f in full_freq_range:
+            if f not in freq_dict:
+                # Find lower and higher available frequencies
+                lower_freqs = [ff for ff in freqs if ff < f]
+                higher_freqs = [ff for ff in freqs if ff > f]
+                if not lower_freqs or not higher_freqs:
+                    # Cannot interpolate if no lower or higher freq exists
+                    continue
+                lower_f = max(lower_freqs)
+                higher_f = min(higher_freqs)
+                # Linear interpolation of mean and std
+                w = (f - lower_f) / (higher_f - lower_f)
+                mean_val = freq_dict[lower_f]['mean'] + w * (freq_dict[higher_f]['mean'] - freq_dict[lower_f]['mean'])
+                std_val = freq_dict[lower_f]['std'] + w * (freq_dict[higher_f]['std'] - freq_dict[lower_f]['std'])
+                freq_dict[f] = {
+                    'mean': mean_val,
+                    'std': std_val
+                }
+                interpolated_freqs.add(int(f))
+
+        return freq_dict, interpolated_freqs
 
 
 # Code originally from Ryan Mercer; ported (01/15/2025) and cleaned here
@@ -60,8 +107,8 @@ def threshold_filtering(df):
     frequency_float_column = 'frequency'
     frequency_int_column = 'frequency int'
 
-    freq_min = 40
-    freq_max = 60
+    freq_min = 0
+    freq_max = 65
 
     # Apply filtering masks on the main DataFrame (df)
     mask = (df[frequency_float_column].astype(float) >= freq_min) & (df[frequency_float_column].astype(float) <= freq_max)
