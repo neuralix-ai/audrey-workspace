@@ -3,9 +3,57 @@ import numpy as np
 import scipy.interpolate
 from scipy.optimize import brentq
 from util.preprocessing import find_closest_time
+from IPython.display import display
 
 
-def find_intersection_point(func1, func2, x_min, x_max):
+def estimate_sampling_interval(site_time_info): # still naive -- 
+    # estimates the sampling interval of some data bu taking the average time delta between the samples
+    # this does not consider a reality where there's a multimodal distribution of sampling intervals
+    # ------------------------------------------------
+    # site_time_info: the 'timestamp' column of the dataframes we've been using
+    # output: (int) the average time in minutes between samples
+    # ================================================
+    site_time_info['timestamp_datetime'] = pd.to_datetime(site_time_info)
+    site_time_info['delta_t'] = site_time_info['timestamp_datetime'].diff().dt.total_seconds() / 60
+    avg_mins = int(site_time_info['delta_t'].mean())
+    return avg_mins # in units of how many minutes per sample
+
+
+def kpi_charts(kpis_all_sites, site_ids, sites_info, kpis=['kWh/BBL','Flow Rate'],print_chart=False):
+    # generates the Optimize-For-KPI Charts for each of the given sites
+    # ------------------------------------------------
+    # kpis_all_sites: a dictionary of dictionaries, see average_kpis_by_freq.ipynb
+    # site_ids: list of (int) site_ids
+    # output: df_all is a dataframe with all the sites' KPI information averaged on a per-frequency basis
+            # game_kpi reports the best frequency to use, if you were to gamify/optimize for that particular KPI
+    # NOTE: a single sites' KPI chart is saved to a CSV
+    # ================================================
+
+    df_all = pd.DataFrame(columns=['site_id','kWh/BBL','Flow Rate'])
+    for site_id in site_ids:
+        site_name = sites_info[site_id]['site_name']
+        print(site_name)
+        
+        site_kpis = kpis_all_sites[site_id]
+        df_site = pd.DataFrame(site_kpis).transpose()
+        df_site['site_id'] = site_name
+        if print_chart:
+            display(df_site)
+
+        df_all = pd.concat([df_all,df_site])
+
+        game_kpi = {'Flow Rate': int(df_site[df_site['Flow Rate']==max(df_site['Flow Rate'])].index[0]),
+                    'kWh/BBL': int(df_site[df_site['kWh/BBL']==min(df_site['kWh/BBL'])].index[0])}
+        if 'perc_from_BEP' in kpis:
+            game_kpi['perc_from_BEP'] = int(df_site[df_site['abs_perc_from_BEP']==min(df_site['abs_perc_from_BEP'])].index[0])
+        if 'norm_perc_from_BEP' in kpis:
+            game_kpi['norm_perc_from_BEP'] = int(df_site[df_site['abs_norm_perc_from_BEP']==min(df_site['abs_norm_perc_from_BEP'])].index[0])
+
+        df_site.to_csv("bison_kpi_charts/{}_kpis_unnormalized.csv".format(site_id))
+    return df_all, game_kpi
+
+
+def find_intersection_point(func1, func2, x_min, x_max):  # from Ryan
     def func_diff(x):
         return func1(x) - func2(x)
     try:
@@ -264,7 +312,7 @@ def normalize_BEP(df, calibration_stages,approx_time=True): # only feed in df th
     # Interpolate missing frequencies if needed
     freq_dict, interpolated_freqs = interpolate_missing_freqs(freq_dict)
 
-    # NOTE: Audrey had to modify the normalization functionality
+    # NOTE: Audrey had to modify the normalization functionality in a way where data structures were accessed differently 
     # Normalize the health score -- use if frequencies have NOT been snapped to ints
     unnormalized_freqs = set()
     normalized_freqs = set()
@@ -279,8 +327,9 @@ def normalize_BEP(df, calibration_stages,approx_time=True): # only feed in df th
             NORMALIZED_X_ROWS += 1
             mean = freq_dict[f]['mean']
             std = freq_dict[f]['std']
-            norm_BEP = (row[health_score_column] - mean) / std
-            df.loc[i,normalized_health_score_column] = norm_BEP # using df.iloc[row][col] 1) returns a COPY 2) sets the COPY -- do it like this, or even use .at[]
+            if std != 0:
+                norm_BEP = (row[health_score_column] - mean) / std
+                df.loc[i,normalized_health_score_column] = norm_BEP # using df.iloc[row][col] 1) returns a COPY 2) sets the COPY -- do it like this, or even use .at[]
                     # https://stackoverflow.com/questions/76416898/pandas-doesnt-assign-values-to-dataframe
             normalized_freqs.add(int(f))
         else:
@@ -288,8 +337,6 @@ def normalize_BEP(df, calibration_stages,approx_time=True): # only feed in df th
 
     # print("NORMALIZED_X_ROWS: {} out of {}; {}%".format(NORMALIZED_X_ROWS, i, round(NORMALIZED_X_ROWS/i,3)*100))
     return df, unnormalized_freqs, interpolated_freqs, normalized_freqs
-
-
 
 
 def calc_kWh_BBL(df): # from Ryan

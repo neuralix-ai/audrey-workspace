@@ -60,7 +60,7 @@ def threshold_filtering(df):
     frequency_float_column = 'frequency'
     frequency_int_column = 'frequency int'
 
-    freq_min = 0
+    freq_min = 30
     freq_max = 65
 
     # Apply filtering masks on the main DataFrame (df)

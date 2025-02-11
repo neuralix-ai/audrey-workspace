@@ -5,6 +5,15 @@ from datetime import datetime, timedelta
 from util.preprocessing import process_voltage_and_current
 import json
 
+def site_ids_name(): # hardcoded TODO: load this in from somewhere
+    ids = {}
+    ids[33404] = "Union City" 
+    ids[33467] = "Siegrist"
+    ids[57740] = "Canadian"
+    ids[33614] = "Calument"
+    return ids
+
+
 def load_pump_curves(site_ids):
     datapath = "/Users/audreyder/Neuralix/AllPumpCSV/" 
     pump_curve_paths = {site_id:None for site_id in site_ids}
@@ -25,13 +34,15 @@ def cached_bison_data(filepath):
     return df
 
 
-def fetch_bison_data(filepath, start_time=datetime.now() - timedelta(days=62), end_time=datetime.now()):
+def fetch_bison_data(filepath, start_time=datetime.now() - timedelta(days=90), end_time=datetime.now()):
     device_ids = [
         57740,
         # 48034,
         33614,
         33404,
         33467,    
+        48137,
+        48138
     ]  # List of device IDs (integers), e.g., [57740, 33614]
     device_name_substrings = []#['canadian']  # List of devicename substrings, e.g., ['canadian', 'alpha']
     
@@ -225,7 +236,18 @@ def cached_site_info(dict=False):
             {'frequency': 50, 'start_time': '2024-12-17 15:55:11', 'end_time': '2024-12-17 17:50:12'}, 
             {'frequency': 52, 'start_time': '2024-12-17 17:55:12', 'end_time': '2024-12-17 19:50:11'}, 
             {'frequency': 54, 'start_time': '2024-12-17 19:55:11', 'end_time': '2024-12-17 21:45:11'}, 
-            {'frequency': 56, 'start_time': '2024-12-17 21:50:11', 'end_time': '2024-12-17 23:35:14'}]}}
+            {'frequency': 56, 'start_time': '2024-12-17 21:50:11', 'end_time': '2024-12-17 23:35:14'}]},
+        48137:
+        {'enable': False, 'site_name': '1509 1 SWD', 'site_id': 48137, 'num_pumps': 1, 'site_dir_name': '', 
+        'pump_curve_path': "1509 SWD",
+        'calibration_stages': []},
+
+        48138:
+        {'enable': False, 'site_name': '1509 2 SWD', 'site_id': 48138, 'num_pumps': 1, 'site_dir_name': '', 
+        'pump_curve_path': "1509 SWD",
+        'calibration_stages': []}
+            
+        }
 
     else:
         sites_info = [
