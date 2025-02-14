@@ -3,7 +3,7 @@ from copy import deepcopy
 import numpy as np
 import plotly.express as px
 
-# Function to map frequency to color
+
 def map_frequency_to_color(frequencies): # from Ryan -- with a few alterations
     # Map to color index
     # Define the colorscale
@@ -15,10 +15,11 @@ def map_frequency_to_color(frequencies): # from Ryan -- with a few alterations
 
 
 def plot_3kpis(site_data, site_name):
-    # plots the three kpis (kWh/BBL, Flow Rate, and Percent from BEP in a 3D scatter plot)
+    # plots the three kpis (kWh/BBL, Flow Rate, and Percent from BEP in a 3D scatter plot) -- can adapt this to accept any three kpis
     # ------------------------------------------------
     # site_data: a dictionary of dictionaries, see dataloader.py
     # site_name: (str) the name of the site
+    # site_id: (int)
     # output: None
     # ================================================
     fig = px.scatter_3d(site_data,x='flow rate', y='kWh/BBL',z='perc_from_BEP', 
@@ -34,6 +35,7 @@ def plot_3kpis(site_data, site_name):
     X, Y = np.meshgrid(x, y)
     Z = np.zeros_like(X)
     fig.add_surface(x=X, y=Y, z=Z, opacity=1) # Add the plane as a surface
+    plt.show()
     return
 
 

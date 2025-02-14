@@ -4,6 +4,7 @@ import scipy.interpolate
 from scipy.optimize import brentq
 from util.preprocessing import find_closest_time
 from IPython.display import display
+from util.dataloader import select_calib_data
 
 
 def estimate_sampling_interval(site_time_info): # still naive -- 
@@ -15,42 +16,8 @@ def estimate_sampling_interval(site_time_info): # still naive --
     # ================================================
     site_time_info['timestamp_datetime'] = pd.to_datetime(site_time_info)
     site_time_info['delta_t'] = site_time_info['timestamp_datetime'].diff().dt.total_seconds() / 60
-    avg_mins = int(site_time_info['delta_t'].mean())
+    avg_mins = max(1,int(site_time_info['delta_t'].mean())) # NOTE: assume base sampling rate will always be once per minute
     return avg_mins # in units of how many minutes per sample
-
-
-def kpi_charts(kpis_all_sites, site_ids, sites_info, kpis=['kWh/BBL','Flow Rate'],print_chart=False):
-    # generates the Optimize-For-KPI Charts for each of the given sites
-    # ------------------------------------------------
-    # kpis_all_sites: a dictionary of dictionaries, see average_kpis_by_freq.ipynb
-    # site_ids: list of (int) site_ids
-    # output: df_all is a dataframe with all the sites' KPI information averaged on a per-frequency basis
-            # game_kpi reports the best frequency to use, if you were to gamify/optimize for that particular KPI
-    # NOTE: a single sites' KPI chart is saved to a CSV
-    # ================================================
-
-    df_all = pd.DataFrame(columns=['site_id','kWh/BBL','Flow Rate'])
-    for site_id in site_ids:
-        site_name = sites_info[site_id]['site_name']
-        print(site_name)
-        
-        site_kpis = kpis_all_sites[site_id]
-        df_site = pd.DataFrame(site_kpis).transpose()
-        df_site['site_id'] = site_name
-        if print_chart:
-            display(df_site)
-
-        df_all = pd.concat([df_all,df_site])
-
-        game_kpi = {'Flow Rate': int(df_site[df_site['Flow Rate']==max(df_site['Flow Rate'])].index[0]),
-                    'kWh/BBL': int(df_site[df_site['kWh/BBL']==min(df_site['kWh/BBL'])].index[0])}
-        if 'perc_from_BEP' in kpis:
-            game_kpi['perc_from_BEP'] = int(df_site[df_site['abs_perc_from_BEP']==min(df_site['abs_perc_from_BEP'])].index[0])
-        if 'norm_perc_from_BEP' in kpis:
-            game_kpi['norm_perc_from_BEP'] = int(df_site[df_site['abs_norm_perc_from_BEP']==min(df_site['abs_norm_perc_from_BEP'])].index[0])
-
-        df_site.to_csv("bison_kpi_charts/{}_kpis_unnormalized.csv".format(site_id))
-    return df_all, game_kpi
 
 
 def find_intersection_point(func1, func2, x_min, x_max):  # from Ryan
@@ -64,13 +31,11 @@ def find_intersection_point(func1, func2, x_min, x_max):  # from Ryan
         return None
 
 
-def calc_perc_BEP(df, site_id, site_pump_curves): # from Ryan
+def calc_perc_BEP(df, df_pump_data): # from Ryan
     # Define the necessary column names
     flow_column = 'flow rate'          # Replace with your actual flow rate column name
     frequency_column = 'frequency'     # Replace with your actual frequency column name
     
-    # Load the data from the CSV file
-    df_pump_data = site_pump_curves[site_id]
     # Separate speed and efficiency lines
     speed_data = df_pump_data[df_pump_data['type'] == 'speed']
     efficiency_data = df_pump_data[df_pump_data['type'] == 'efficiency']
@@ -268,39 +233,26 @@ def interpolate_missing_freqs(freq_dict): # From Ryan
         return freq_dict, interpolated_freqs
 
 
-def normalize_BEP(df, calibration_stages,approx_time=True): # only feed in df that has undergone previous BEP calc stage, and rounding of frequencies to nearest int
-    # Columns in your dataframe -- if the the exact start/end time can't be found in the dataframe, find the closest time to it
-    health_score_column = 'perc_from_BEP'
-    normalized_health_score_column = 'norm_perc_from_BEP'
-
+def normalize_BEP(df, calibration_stages,approx_time=True):
     # for each frequency that is calibrated (nearest whole), find the mean and standard deviation of the KPI to normalize (kWh/BBL)
     # for each frequency that is not being calibrated (nearest whole), approximate it based on interpolated data
     # then for each datapoint, consider its frequency, then normalize the KPI (kWh/BBL) by its calibration statistics (mean and std)
+    # NOTE: only feed in df that has undergone previous BEP calc stage, and rounding of frequencies to nearest int
+    # ------------------------------------------------
+    # df: dataframe with Bison Data
+    # calibration_stages: Ryan's sites_info format has the calibration stage information stored in a specific way, and all sites' calibration stage info is computed here
+    # approx_time: if the the exact start/end time can't be found in the dataframe, find the closest time to it
+    # output: None
+    # ================================================
+    
+    health_score_column = 'perc_from_BEP'
+    normalized_health_score_column = 'norm_perc_from_BEP'
 
     # Compute mean and std from calibration intervals
     freq_dict = {}
     for stage in calibration_stages:
         freq = stage['frequency']
-        start = stage['start_time']
-        end = stage['end_time']
-        
-        start_idx, end_idx = None, None
-         # first condition: do you find the exact timestamp in the db? second condition: do you allow searching for the closest approx time? or do you want exact?
-        if len(df[df['timestamp']==start]) == 0 and approx_time:
-            date_time = start.split(" ")
-            if approx_time:
-                start, start_idx = find_closest_time(df,date_time[0],query_time=date_time[1])
-        else:
-            start_idx = df[df['timestamp']==start].index[0]
-            
-        if len(df[df['timestamp']==end]) == 0 and approx_time:
-            date_time = end.split(" ")
-            end, end_idx = find_closest_time(df,date_time[0],query_time=date_time[1])
-        else:
-            end_idx = df[df['timestamp']==end].index[0]
-        
-        # datapoints for the frequency being calibrated at this stage -- TODO: confirm, this should never be np.nan...?
-        freq_cal_data = df.loc[start_idx:end_idx]        
+        freq_cal_data = select_calib_data(df, stage,approx_time=approx_time)       
         freq_mean = freq_cal_data[health_score_column].mean() # if not freq_cal_data.empty else np.nan 
         freq_std = freq_cal_data[health_score_column].std() #  if not freq_cal_data.empty else np.nan
         # print("freq_mean: {}, freq_std: {}".format(freq_mean, freq_std))

@@ -2,8 +2,9 @@ import os
 import pandas as pd
 import psycopg2
 from datetime import datetime, timedelta
-from util.preprocessing import process_voltage_and_current
+from util.preprocessing import process_voltage_and_current, find_closest_time
 import json
+
 
 def site_ids_name(): # hardcoded TODO: load this in from somewhere
     ids = {}
@@ -16,21 +17,24 @@ def site_ids_name(): # hardcoded TODO: load this in from somewhere
 
 def load_pump_curves(site_ids):
     datapath = "/Users/audreyder/Neuralix/AllPumpCSV/" 
-    pump_curve_paths = {site_id:None for site_id in site_ids}
+    pump_curves = {site_id:None for site_id in site_ids}
     calumet = pd.read_csv(datapath+"PumpCurve_Calument_33614_DataPoints.csv")
     canadian = pd.read_csv(datapath+"PumpCurve_Canadian_57740_DataPoints.csv")
     siegrist = pd.read_csv(datapath+"PumpCurve_Siegrist_33467_DataPoints.csv")
     unioncity = pd.read_csv(datapath+"PumpCurve_UnionCity2_33404_DataPoints.csv")
-    pump_curve_paths[33404] = unioncity # hardcoded TODO: Future proof; do this dynamically by site_id
-    pump_curve_paths[33467] = siegrist
-    pump_curve_paths[57740] = canadian
-    pump_curve_paths[33614] = calumet
-    return pump_curve_paths
+    pump_curves[33404] = unioncity # hardcoded TODO: Future proof; do this dynamically by site_id
+    pump_curves[33467] = siegrist
+    pump_curves[57740] = canadian
+    pump_curves[33614] = calumet
+    return pump_curves
+
 
 def cached_bison_data(filepath):
     df = pd.read_csv(filepath)
     print("Data columns: {}".format(df.columns))
     print("Number of rows: {}".format(len(df)))
+    print("Earliest timestamp: {}".format(df.iloc[0]['timestamp']))
+    print("Latest timestamp: {}".format(df.iloc[-1]['timestamp']))
     return df
 
 
@@ -294,3 +298,33 @@ def cached_site_info(dict=False):
             {'frequency': 56, 'start_time': '2024-12-17 21:50:11', 'end_time': '2024-12-17 23:35:14'}]}]
 
     return sites_info
+
+
+def select_calib_data(df, stage, approx_time=True):
+    # for a given calibration stage and the dataframe that data is in, select just that calibration data
+    # ------------------------------------------------
+    # df: the dataframe the calibration stage data is in
+    # stage: the calibration stage data for a given site in the Ryan sites_info format (see cached_site_info())
+    # output: the calibration data for the input stage specified
+    # ================================================
+    start = stage['start_time']
+    end = stage['end_time']
+
+    start_idx, end_idx = None, None
+        # first condition: do you find the exact timestamp in the db? second condition: do you allow searching for the closest approx time? or do you want exact?
+    if len(df[df['timestamp']==start]) == 0 and approx_time:
+        date_time = start.split(" ")
+        if approx_time:
+            start, start_idx = find_closest_time(df,date_time[0],query_time=date_time[1])
+    else:
+        start_idx = df[df['timestamp']==start].index[0]
+        
+    if len(df[df['timestamp']==end]) == 0 and approx_time:
+        date_time = end.split(" ")
+        end, end_idx = find_closest_time(df,date_time[0],query_time=date_time[1])
+    else:
+        end_idx = df[df['timestamp']==end].index[0]
+    
+    # datapoints for the frequency being calibrated at this stage -- TODO: confirm, this should never be np.nan...?
+    stage_cal_data = df.loc[start_idx:end_idx]
+    return stage_cal_data
