@@ -14,9 +14,8 @@ def estimate_sampling_interval(site_time_info): # still naive --
     # site_time_info: the 'timestamp' column of the dataframes we've been using
     # output: (int) the average time in minutes between samples
     # ================================================
-    site_time_info['timestamp_datetime'] = pd.to_datetime(site_time_info)
-    site_time_info['delta_t'] = site_time_info['timestamp_datetime'].diff().dt.total_seconds() / 60
-    avg_mins = max(1,int(site_time_info['delta_t'].mean())) # NOTE: assume base sampling rate will always be once per minute
+    delta_t_mins = site_time_info.diff().dt.total_seconds() / 60 # already there
+    avg_mins = int(max(1,delta_t_mins.mean())) # NOTE: assume base sampling rate will always be once per minute
     return avg_mins # in units of how many minutes per sample
 
 
@@ -199,38 +198,38 @@ def calc_perc_BEP(df, df_pump_data): # from Ryan
 
 
 def interpolate_missing_freqs(freq_dict): # From Ryan
-        """
-        Interpolates means and stds for missing frequencies.
-        freq_dict should be {freq: {'mean':..., 'std':...}}
-        """
-        freqs = sorted(freq_dict.keys())
-        if len(freqs) <= 1:
-            # If we have only one or zero frequencies, no interpolation is possible
-            return freq_dict
+    """
+    Interpolates means and stds for missing frequencies.
+    freq_dict should be {freq: {'mean':..., 'std':...}}
+    """
+    freqs = sorted(freq_dict.keys())
+    if len(freqs) <= 1:
+        # If we have only one or zero frequencies, no interpolation is possible
+        return freq_dict
 
-        full_freq_range = range(freqs[0], freqs[-1] + 1)
-        interpolated_freqs = set()
-        for f in full_freq_range:
-            if f not in freq_dict:
-                # Find lower and higher available frequencies
-                lower_freqs = [ff for ff in freqs if ff < f]
-                higher_freqs = [ff for ff in freqs if ff > f]
-                if not lower_freqs or not higher_freqs:
-                    # Cannot interpolate if no lower or higher freq exists
-                    continue
-                lower_f = max(lower_freqs)
-                higher_f = min(higher_freqs)
-                # Linear interpolation of mean and std
-                w = (f - lower_f) / (higher_f - lower_f)
-                mean_val = freq_dict[lower_f]['mean'] + w * (freq_dict[higher_f]['mean'] - freq_dict[lower_f]['mean'])
-                std_val = freq_dict[lower_f]['std'] + w * (freq_dict[higher_f]['std'] - freq_dict[lower_f]['std'])
-                freq_dict[f] = {
-                    'mean': mean_val,
-                    'std': std_val
-                }
-                interpolated_freqs.add(int(f))
+    full_freq_range = range(freqs[0], freqs[-1] + 1)
+    interpolated_freqs = set()
+    for f in full_freq_range:
+        if f not in freq_dict:
+            # Find lower and higher available frequencies
+            lower_freqs = [ff for ff in freqs if ff < f]
+            higher_freqs = [ff for ff in freqs if ff > f]
+            if not lower_freqs or not higher_freqs:
+                # Cannot interpolate if no lower or higher freq exists
+                continue
+            lower_f = max(lower_freqs)
+            higher_f = min(higher_freqs)
+            # Linear interpolation of mean and std
+            w = (f - lower_f) / (higher_f - lower_f)
+            mean_val = freq_dict[lower_f]['mean'] + w * (freq_dict[higher_f]['mean'] - freq_dict[lower_f]['mean'])
+            std_val = freq_dict[lower_f]['std'] + w * (freq_dict[higher_f]['std'] - freq_dict[lower_f]['std'])
+            freq_dict[f] = {
+                'mean': mean_val,
+                'std': std_val
+            }
+            interpolated_freqs.add(int(f))
 
-        return freq_dict, interpolated_freqs
+    return interpolated_freqs
 
 
 def normalize_BEP(df, calibration_stages,approx_time=True):
@@ -255,14 +254,20 @@ def normalize_BEP(df, calibration_stages,approx_time=True):
         freq_cal_data = select_calib_data(df, stage,approx_time=approx_time)       
         freq_mean = freq_cal_data[health_score_column].mean() # if not freq_cal_data.empty else np.nan 
         freq_std = freq_cal_data[health_score_column].std() #  if not freq_cal_data.empty else np.nan
-        # print("freq_mean: {}, freq_std: {}".format(freq_mean, freq_std))
         freq_dict[freq] = {
             'mean': freq_mean,
             'std': freq_std
         }
 
-    # Interpolate missing frequencies if needed
-    freq_dict, interpolated_freqs = interpolate_missing_freqs(freq_dict)
+    # print("1. freq_dict.keys: {}".format(freq_dict.keys()))
+    # Interpolate missing frequencies if needed -- modifies freq_dict inplace
+    interpolated_freqs = interpolate_missing_freqs(freq_dict)
+    # print("2. freq_dict.keys: {}".format(freq_dict.keys()))
+
+    # print("==========================================")
+
+    # iloc is the ith row of the dataframe; by contrast, simply accessing with "i" is 0-based
+    # https://stackoverflow.com/questions/21800169/python-pandas-get-index-of-rows-where-column-matches-certain-value
 
     # NOTE: Audrey had to modify the normalization functionality in a way where data structures were accessed differently 
     # Normalize the health score -- use if frequencies have NOT been snapped to ints
@@ -271,30 +276,29 @@ def normalize_BEP(df, calibration_stages,approx_time=True):
     df[normalized_health_score_column] = pd.Series([np.nan] * len(df[health_score_column]))
     NORMALIZED_X_ROWS = 0
 
-    for i,row in df.iterrows():
-        if i == len(df): #... is there an out of bounds error here? we index - 0 at i...
-            break
-        f = row['frequency'] 
-        if f in freq_dict: # this frequency found in the data WAS calibrated
+    df_freqs = np.unique(df['frequency'])
+    for freq in freq_dict.keys(): # this frequency found in the data WAS calibrated
+        if freq in df_freqs:
             NORMALIZED_X_ROWS += 1
-            mean = freq_dict[f]['mean']
-            std = freq_dict[f]['std']
+            mean = freq_dict[freq]['mean']
+            std = freq_dict[freq]['std']
             if std != 0:
-                norm_BEP = (row[health_score_column] - mean) / std
-                df.loc[i,normalized_health_score_column] = norm_BEP # using df.iloc[row][col] 1) returns a COPY 2) sets the COPY -- do it like this, or even use .at[]
-                    # https://stackoverflow.com/questions/76416898/pandas-doesnt-assign-values-to-dataframe
-            normalized_freqs.add(int(f))
+                perc_from_BEP_at_freq = df.loc[df['frequency'] == freq,health_score_column]
+                norm_BEP = (perc_from_BEP_at_freq - mean) / std
+                df.loc[df['frequency'] == freq,normalized_health_score_column] = norm_BEP
+                # using df.iloc[row][col] 1) returns a COPY 2) sets the COPY (?)
+                # https://stackoverflow.com/questions/76416898/pandas-doesnt-assign-values-to-dataframe
+            normalized_freqs.add(int(freq))
         else:
-            unnormalized_freqs.add(int(f))
-
+            unnormalized_freqs.add(int(freq))
+        
     # print("NORMALIZED_X_ROWS: {} out of {}; {}%".format(NORMALIZED_X_ROWS, i, round(NORMALIZED_X_ROWS/i,3)*100))
     return df, unnormalized_freqs, interpolated_freqs, normalized_freqs
 
 
 def calc_kWh_BBL(df): # from Ryan
-    # Ensure 'timestamp' is in datetime format
-    df['timestamp_datetime'] = pd.to_datetime(df['timestamp'])
-    df['delta_t'] = df['timestamp_datetime'].diff()
+    # df['timestamp_datetime'] = pd.to_datetime(df['timestamp'])
+    # df['delta_t'] = df['timestamp_datetime'].diff()
 
     # Apply initial filter for valid samples before feature derivations
     initial_valid = (
@@ -311,16 +315,17 @@ def calc_kWh_BBL(df): # from Ryan
 
     # 1. Identify invalid samples based on initial_valid
     invalid = ~initial_valid
-    # 2. Identify samples immediately before invalid samples
-    invalid_prev = invalid.shift(1).fillna(False)
-    # 3. Identify samples immediately after invalid samples
-    invalid_next = invalid.shift(-1).fillna(False)
+    invalid_prev, invalid_next = None,None
+    with pd.option_context("future.no_silent_downcasting", True):
+        # 2. Identify samples immediately before invalid samples
+        invalid_prev = invalid.shift(1).fillna(False)
+        # 3. Identify samples immediately after invalid samples
+        invalid_next = invalid.shift(-1).fillna(False)
     # 4. Define the updated validity mask:
     #    A sample is valid only if:
     #    - It meets the initial_valid conditions, AND
     #    - Neither the previous nor the next sample is invalid
     initial_valid = initial_valid & ~invalid_prev & ~invalid_next
-
     # Filter the DataFrame
     df = df[initial_valid].copy()
 

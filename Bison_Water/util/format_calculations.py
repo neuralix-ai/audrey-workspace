@@ -17,7 +17,6 @@ def compute_kpis_for_sites(site_data, site_id, sites_info=None, site_pump_curves
     # output: (int) the average time in minutes between samples
     # ================================================
 
-    sampling_interval = estimate_sampling_interval(site_data['timestamp'])
     site_data['frequency'] = site_data['frequency'].round() # round freqs to nearest whole
     site_freqs = np.unique(site_data['frequency']) # find unique freqs
     if 'Flow Rate' in kpis:
@@ -36,6 +35,7 @@ def compute_kpis_for_sites(site_data, site_id, sites_info=None, site_pump_curves
         print("Normalized frequencies: {}".format(normalized_freqs))
 
     # format it into a chart, averaging values per frequnecy
+    sampling_interval = estimate_sampling_interval(site_data['timestamp_datetime'])
     site_pump_kpis = {}
     for site_freq in site_freqs: # for each of these freqs...
         site_freq_data = site_data[site_data['frequency']==site_freq]

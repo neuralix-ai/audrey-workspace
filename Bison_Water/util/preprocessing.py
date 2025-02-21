@@ -55,7 +55,6 @@ def remove_NaN_cols(df):
 
 def threshold_filtering(df):
     # Define pump-related variables
-    pressure_column = 'discharge pressure'
     flow_column = 'flow rate'
     frequency_float_column = 'frequency'
     frequency_int_column = 'frequency int'

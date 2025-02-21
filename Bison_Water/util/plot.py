@@ -14,7 +14,7 @@ def map_frequency_to_color(frequencies): # from Ryan -- with a few alterations
     return color_map
 
 
-def plot_3kpis(site_data, site_name):
+def plot_3kpis(site_data, site_name, x_kpi='flow rate', y_kpi='kWh/BBL', z_kpi='perc_from_BEP'):
     # plots the three kpis (kWh/BBL, Flow Rate, and Percent from BEP in a 3D scatter plot) -- can adapt this to accept any three kpis
     # ------------------------------------------------
     # site_data: a dictionary of dictionaries, see dataloader.py
@@ -22,21 +22,22 @@ def plot_3kpis(site_data, site_name):
     # site_id: (int)
     # output: None
     # ================================================
-    fig = px.scatter_3d(site_data,x='flow rate', y='kWh/BBL',z='perc_from_BEP', 
+    fig = px.scatter_3d(site_data,x=x_kpi, y=y_kpi,z=z_kpi, 
                         color="frequency",opacity=0.8,color_continuous_scale=px.colors.sequential.Turbo,
                         title="Site: {}".format(site_name),height=700,width=800)
     # Update the marker size
     fig.update_traces(marker=dict(size=3))
     # Create the meshgrid for the plane
-    x_min, x_max = min(site_data['flow rate']), max(site_data['flow rate'])
-    y_min, y_max = site_data['kWh/BBL'].min(), site_data['kWh/BBL'].max()
-    x = np.arange(x_min, x_max, 10)
-    y = np.arange(y_min, y_max, 0.1)
-    X, Y = np.meshgrid(x, y)
-    Z = np.zeros_like(X)
-    fig.add_surface(x=X, y=Y, z=Z, opacity=1) # Add the plane as a surface
-    plt.show()
-    return
+    x_min, x_max = min(site_data[x_kpi]), max(site_data[x_kpi])
+    y_min, y_max = site_data[y_kpi].min(), site_data[y_kpi].max()
+
+    if z_kpi == 'perc_from_BEP':
+        x = np.arange(x_min, x_max, 10)
+        y = np.arange(y_min, y_max, 0.1)
+        X, Y = np.meshgrid(x, y)
+        Z = np.zeros_like(X)
+        fig.add_surface(x=X, y=Y, z=Z, opacity=1) # Add the plane as a surface
+    return fig
 
 
 def plot_ts_gt(sitegts, freq_data_, site_id, site_bounds): # call this on a per site basis

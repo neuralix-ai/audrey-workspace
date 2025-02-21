@@ -4,7 +4,7 @@ import psycopg2
 from datetime import datetime, timedelta
 from util.preprocessing import process_voltage_and_current, find_closest_time
 import json
-
+from copy import deepcopy
 
 def site_ids_name(): # hardcoded TODO: load this in from somewhere
     ids = {}
@@ -31,6 +31,10 @@ def load_pump_curves(site_ids):
 
 def cached_bison_data(filepath):
     df = pd.read_csv(filepath)
+    # Ensure 'timestamp' is in datetime format
+    print("Adding Datetime Timestamp and Delta T columns...")
+    df['timestamp_datetime'] = pd.to_datetime(df['timestamp'].copy())
+    df['delta_t'] = df['timestamp_datetime'].copy().diff()
     print("Data columns: {}".format(df.columns))
     print("Number of rows: {}".format(len(df)))
     print("Earliest timestamp: {}".format(df.iloc[0]['timestamp']))
@@ -187,6 +191,10 @@ def fetch_bison_data(filepath, start_time=datetime.now() - timedelta(days=90), e
 
     # Process the voltage and current columns
     df = process_voltage_and_current(df)
+
+    # Ensure 'timestamp' is in datetime format # -- moved this step to catched data function
+    # df['timestamp_datetime'] = pd.to_datetime(df['timestamp'])
+    # df['delta_t'] = df['timestamp_datetime'].diff()
     df.to_csv(filepath, index=True)
     return df
 
@@ -225,12 +233,12 @@ def cached_site_info(dict=False):
         {'enable': False, 'site_name': 'Siegrist SWD', 'site_id': 33467, 'num_pumps': 1, 'site_dir_name': 'SiegristSWD(33467)', 
         'pump_curve_path': '/Users/audreyder/Neuralix/AllPumpCSV/PumpCurve_Siegrist_33467_DataPoints.csv', # replace path as appropriate
         'calibration_stages': [
-            {'frequency': 47, 'start_time': '2024-12-17 10:00:19', 'end_time': '2024-12-17 12:00:21'}, 
-            {'frequency': 49, 'start_time': '2024-12-17 12:05:25', 'end_time': '2024-12-17 14:00:32'}, 
-            {'frequency': 51, 'start_time': '2024-12-17 14:01:18', 'end_time': '2024-12-17 16:00:19'}, 
-            {'frequency': 53, 'start_time': '2024-12-17 16:01:04', 'end_time': '2024-12-17 18:00:38'}, 
-            {'frequency': 55, 'start_time': '2024-12-17 18:00:58', 'end_time': '2024-12-17 20:00:22'}, 
-            {'frequency': 57, 'start_time': '2024-12-17 20:05:27', 'end_time': '2024-12-17 21:55:19'}]}, 
+            {'frequency': 47, 'start_time': '2024-12-17 12:00:21', 'end_time': '2024-12-17 13:55:19'}, 
+            {'frequency': 49, 'start_time': '2024-12-17 14:00:32', 'end_time': '2024-12-17 15:55:19'}, 
+            {'frequency': 51, 'start_time': '2024-12-17 16:00:19', 'end_time': '2024-12-17 17:55:20'}, 
+            {'frequency': 53, 'start_time': '2024-12-17 18:00:38', 'end_time': '2024-12-17 19:55:20'}, 
+            {'frequency': 55, 'start_time': '2024-12-17 20:00:22', 'end_time': '2024-12-17 21:50:23'}, 
+            {'frequency': 57, 'start_time': '2024-12-17 21:55:19', 'end_time': '2024-12-17 23:45:21'}]}, 
         33404:
         {'enable': False, 'site_name': 'Union City 2 SWD', 'site_id': 33404, 'num_pumps': 1, 'site_dir_name': 'UnionCity2SWD(33404)', 
         'pump_curve_path': '/Users/audreyder/Neuralix/AllPumpCSV/PumpCurve_UnionCity2_33404_DataPoints.csv', # replace path as appropriate
@@ -254,48 +262,24 @@ def cached_site_info(dict=False):
         }
 
     else:
-        sites_info = [
-        {'enable': False, 'site_name': 'Calumet SWD', 'site_id': 33614, 'num_pumps': 1, 'site_dir_name': 'CalumetSWD(33614)', 
-        'pump_curve_path': '/Users/audreyder/Neuralix/AllPumpCSV/PumpCurve_Calument_33614_DataPoints.csv', # replace path as appropriate
-        'calibration_stages': [
-            {'frequency': 48, 'start_time': '2025-01-15 15:00:19', 'end_time': '2025-01-15 16:20:19'}, 
-            {'frequency': 50, 'start_time': '2025-01-15 16:25:19', 'end_time': '2025-01-15 18:10:17'}, 
-            {'frequency': 52, 'start_time': '2025-01-15 18:15:19', 'end_time': '2025-01-15 19:50:23'}, 
-            {'frequency': 54, 'start_time': '2025-01-15 19:55:18', 'end_time': '2025-01-15 21:40:18'}, 
-            {'frequency': 56, 'start_time': '2025-01-15 21:45:18', 'end_time': '2025-01-15 23:35:20'}, 
-            {'frequency': 58, 'start_time': '2025-01-15 23:40:19', 'end_time': '2025-01-16 00:08:30'}]}, 
+        sites_info = [{'enable': False, 'site_name': 'Calumet SWD', 'site_id': 33614, 'num_pumps': 1, 'site_dir_name': 'CalumetSWD(33614)', 'pump_curve_path': '/Users/audreyder/Neuralix/AllPumpCSV/PumpCurve_Calument_33614_DataPoints.csv', 
+                       'calibration_stages': [{'frequency': 48, 'start_time': '2025-01-15 15:00:19', 'end_time': '2025-01-15 16:20:19'}, {'frequency': 50, 'start_time': '2025-01-15 16:25:19', 'end_time': '2025-01-15 18:10:17'}, {'frequency': 52, 'start_time': '2025-01-15 18:15:19', 'end_time': '2025-01-15 19:50:23'}, {'frequency': 54, 'start_time': '2025-01-15 19:55:18', 'end_time': '2025-01-15 21:40:18'}, {'frequency': 56, 'start_time': '2025-01-15 21:45:18', 'end_time': '2025-01-15 23:35:20'}, {'frequency': 58, 'start_time': '2025-01-15 23:40:19', 'end_time': '2025-01-16 00:08:30'}]},
+                      
+        {'enable': False, 'site_name': 'Canadian SWD', 'site_id': 57740, 'num_pumps': 1, 'site_dir_name': 'CanadianSWD(57740)', 'pump_curve_path': '/Users/audreyder/Neuralix/AllPumpCSV/PumpCurve_Canadian_57740_DataPoints.csv', 
+         'calibration_stages': [{'frequency': 44, 'start_time': '2024-12-13 12:00:02', 'end_time': '2024-12-13 13:58:02'}, {'frequency': 47, 'start_time': '2024-12-13 13:59:03', 'end_time': '2024-12-13 15:51:03'}, {'frequency': 49, 'start_time': '2024-12-13 15:52:03', 'end_time': '2024-12-13 17:51:03'}, {'frequency': 51, 'start_time': '2024-12-13 17:52:02', 'end_time': '2024-12-13 19:50:04'}, {'frequency': 53, 'start_time': '2024-12-13 19:51:03', 'end_time': '2024-12-13 21:47:04'}, {'frequency': 55, 'start_time': '2024-12-13 21:48:03', 'end_time': '2024-12-13 23:53:02'}, {'frequency': 57, 'start_time': '2024-12-13 23:54:03', 'end_time': '2024-12-14 01:53:03'}, {'frequency': 59, 'start_time': '2024-12-14 01:54:03', 'end_time': '2024-12-14 03:53:02'}]},
 
-        {'enable': False, 'site_name': 'Canadian SWD', 'site_id': 57740, 'num_pumps': 1, 'site_dir_name': 'CanadianSWD(57740)', 
-        'pump_curve_path': '/Users/audreyder/Neuralix/AllPumpCSV/PumpCurve_Canadian_57740_DataPoints.csv', # replace path as appropriate
-        'calibration_stages': [
-            {'frequency': 44, 'start_time': '2024-12-13 12:00:02', 'end_time': '2024-12-13 13:58:02'}, 
-            {'frequency': 47, 'start_time': '2024-12-13 13:59:03', 'end_time': '2024-12-13 15:51:03'}, 
-            {'frequency': 49, 'start_time': '2024-12-13 15:52:03', 'end_time': '2024-12-13 17:51:03'}, 
-            {'frequency': 51, 'start_time': '2024-12-13 17:52:02', 'end_time': '2024-12-13 19:50:04'}, 
-            {'frequency': 53, 'start_time': '2024-12-13 19:51:03', 'end_time': '2024-12-13 21:47:04'}, 
-            {'frequency': 55, 'start_time': '2024-12-13 21:48:03', 'end_time': '2024-12-13 23:53:02'}, 
-            {'frequency': 57, 'start_time': '2024-12-13 23:54:03', 'end_time': '2024-12-14 01:53:03'}, 
-            {'frequency': 59, 'start_time': '2024-12-14 01:54:03', 'end_time': '2024-12-14 03:53:02'}]}, 
+        {'enable': False, 'site_name': 'Siegrist SWD', 'site_id': 33467, 'num_pumps': 1, 'site_dir_name': 'SiegristSWD(33467)', 'pump_curve_path': '/Users/audreyder/Neuralix/AllPumpCSV/PumpCurve_Siegrist_33467_DataPoints.csv', 
+         'calibration_stages': [
+             {'frequency': 47, 'start_time': '2024-12-17 12:00:21', 'end_time': '2024-12-17 13:55:19'}, 
+             {'frequency': 49, 'start_time': '2024-12-17 14:00:32', 'end_time': '2024-12-17 15:55:19'}, 
+             {'frequency': 51, 'start_time': '2024-12-17 16:00:19', 'end_time': '2024-12-17 17:55:20'}, 
+             {'frequency': 53, 'start_time': '2024-12-17 18:00:38', 'end_time': '2024-12-17 19:55:20'}, 
+             {'frequency': 55, 'start_time': '2024-12-17 20:00:22', 'end_time': '2024-12-17 21:50:23'}, 
+             {'frequency': 57, 'start_time': '2024-12-17 21:55:19', 'end_time': '2024-12-17 23:45:21'}]},
 
-        {'enable': False, 'site_name': 'Siegrist SWD', 'site_id': 33467, 'num_pumps': 1, 'site_dir_name': 'SiegristSWD(33467)', 
-        'pump_curve_path': '/Users/audreyder/Neuralix/AllPumpCSV/PumpCurve_Siegrist_33467_DataPoints.csv', # replace path as appropriate
-        'calibration_stages': [
-            {'frequency': 47, 'start_time': '2024-12-17 10:00:19', 'end_time': '2024-12-17 12:00:21'}, 
-            {'frequency': 49, 'start_time': '2024-12-17 12:05:25', 'end_time': '2024-12-17 14:00:32'}, 
-            {'frequency': 51, 'start_time': '2024-12-17 14:01:18', 'end_time': '2024-12-17 16:00:19'}, 
-            {'frequency': 53, 'start_time': '2024-12-17 16:01:04', 'end_time': '2024-12-17 18:00:38'}, 
-            {'frequency': 55, 'start_time': '2024-12-17 18:00:58', 'end_time': '2024-12-17 20:00:22'}, 
-            {'frequency': 57, 'start_time': '2024-12-17 20:05:27', 'end_time': '2024-12-17 21:55:19'}]}, 
-            
-        {'enable': False, 'site_name': 'Union City 2 SWD', 'site_id': 33404, 'num_pumps': 1, 'site_dir_name': 'UnionCity2SWD(33404)', 
-        'pump_curve_path': '/Users/audreyder/Neuralix/AllPumpCSV/PumpCurve_UnionCity2_33404_DataPoints.csv', # replace path as appropriate
-        'calibration_stages': [
-            {'frequency': 46, 'start_time': '2024-12-17 12:00:12', 'end_time': '2024-12-17 13:50:12'}, 
-            {'frequency': 48, 'start_time': '2024-12-17 13:55:11', 'end_time': '2024-12-17 15:50:11'}, 
-            {'frequency': 50, 'start_time': '2024-12-17 15:55:11', 'end_time': '2024-12-17 17:50:12'}, 
-            {'frequency': 52, 'start_time': '2024-12-17 17:55:12', 'end_time': '2024-12-17 19:50:11'}, 
-            {'frequency': 54, 'start_time': '2024-12-17 19:55:11', 'end_time': '2024-12-17 21:45:11'}, 
-            {'frequency': 56, 'start_time': '2024-12-17 21:50:11', 'end_time': '2024-12-17 23:35:14'}]}]
+        {'enable': False, 'site_name': 'Union City 2 SWD', 'site_id': 33404, 'num_pumps': 1, 'site_dir_name': 'UnionCity2SWD(33404)', 'pump_curve_path': '/Users/audreyder/Neuralix/AllPumpCSV/PumpCurve_UnionCity2_33404_DataPoints.csv', 
+         'calibration_stages': [{'frequency': 46, 'start_time': '2024-12-17 12:00:12', 'end_time': '2024-12-17 13:50:12'}, {'frequency': 48, 'start_time': '2024-12-17 13:55:11', 'end_time': '2024-12-17 15:50:11'}, {'frequency': 50, 'start_time': '2024-12-17 15:55:11', 'end_time': '2024-12-17 17:50:12'}, {'frequency': 52, 'start_time': '2024-12-17 17:55:12', 'end_time': '2024-12-17 19:50:11'}, {'frequency': 54, 'start_time': '2024-12-17 19:55:11', 'end_time': '2024-12-17 21:45:11'}, {'frequency': 56, 'start_time': '2024-12-17 21:50:11', 'end_time': '2024-12-17 23:35:14'}]}
+        ]
 
     return sites_info
 
@@ -326,5 +310,5 @@ def select_calib_data(df, stage, approx_time=True):
         end_idx = df[df['timestamp']==end].index[0]
     
     # datapoints for the frequency being calibrated at this stage -- TODO: confirm, this should never be np.nan...?
-    stage_cal_data = df.loc[start_idx:end_idx]
+    stage_cal_data = deepcopy(df.loc[start_idx:end_idx])
     return stage_cal_data
